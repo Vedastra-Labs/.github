@@ -1,0 +1,47 @@
+# Contract checks — architecture & API-boundary gates that catch bugs invisible to
+# tsc/knip/lint: internal fetch() calls to nonexistent routes, cross-product imports,
+# and repository→service layer inversion. These are the STATIC (no-DB) checkers from
+# vedastra-platform/scripts/check/; they are zero-dependency Node scripts, so no install
+# step is needed. The DB-dependent RLS-coverage checker runs in run-qa.sh Phase 3
+# (needs a live Postgres stack) rather than here.
+#
+# See vedastra-platform/scripts/check/*.mjs and the `check:contracts` npm scripts.
+name: contract-checks
+
+on:
+  push:
+    paths:
+      - '**/app/api/**/route.ts'
+      - '**/src/lib/**'
+      - '**/workers/**'
+      - '**/src/db/schema.ts'
+      - 'vedastra-platform/scripts/check/**'
+      - '.github/workflows/contract-checks.yml'
+  pull_request:
+    paths:
+      - '**/app/api/**/route.ts'
+      - '**/src/lib/**'
+      - '**/workers/**'
+      - '**/src/db/schema.ts'
+      - 'vedastra-platform/scripts/check/**'
+      - '.github/workflows/contract-checks.yml'
+  workflow_dispatch: {}
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # #1 — every internal /api/(internal|v1)/… fetch target has a matching route handler.
+      - name: Contract check — fetch-targets
+        run: node vedastra-platform/scripts/check/check-fetch-targets.mjs
+
+      # #4 — no cross-product imports (R1) + no repository→service inversion (R2).
+      #      R3 (direct DB outside repositories) is a non-blocking WARN inside the script.
+      - name: Contract check — architecture-boundaries
+        run: node vedastra-platform/scripts/check/check-architecture-boundaries.mjs

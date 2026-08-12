@@ -1,0 +1,56 @@
+# Documentation quality gate — runs the doc-lint script on every docs change.
+# See infrastructure/scripts/docs/lint-docs.mjs and DOCUMENTATION-STANDARDS.md §13.
+#
+# Checks: broken relative links · AUTO-GENERATED headers · architecture drift-grep
+# (prisma/supabase/stripe/productivityos/LISTEN-NOTIFY) · bad <sub>.localhost:<port> URLs.
+# Also verifies generated docs are up to date (regenerate + git-diff).
+name: docs-lint
+
+on:
+  push:
+    paths:
+      - '**/*.md'
+      - '**/src/db/schema.ts'
+      - '**/workers/index.ts'
+      - '**/app/api/**/route.ts'
+      - 'infrastructure/scripts/docs/**'
+      - '.github/workflows/docs-lint.yml'
+  pull_request:
+    paths:
+      - '**/*.md'
+      - 'infrastructure/scripts/docs/**'
+  workflow_dispatch: {}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Doc-lint (links · headers · drift · URLs)
+        run: node infrastructure/scripts/docs/lint-docs.mjs
+
+      - name: Verify generated docs are current
+        run: |
+          node infrastructure/scripts/docs/generate-all.mjs
+          # generate-all stamps a timestamp line; ignore that single line when diffing.
+          if git -C "$GITHUB_WORKSPACE" diff --quiet -- ':(exclude)**/Last Generated*' \
+             ; then
+            echo "generated docs are current."
+          else
+            CHANGED=$(git -C "$GITHUB_WORKSPACE" diff --name-only | grep -v 'Last Generated' || true)
+            # A timestamp-only diff is acceptable; a content diff is not.
+            SUBSTANTIVE=$(git -C "$GITHUB_WORKSPACE" diff -U0 -- '**/docs/generated/**/README.md' \
+              | grep -E '^\+' | grep -v '^\+\+\+' | grep -v 'Last Generated' || true)
+            if [ -n "$SUBSTANTIVE" ]; then
+              echo "::error::Generated docs are stale — run: node infrastructure/scripts/docs/generate-all.mjs and commit."
+              git -C "$GITHUB_WORKSPACE" diff --stat -- '**/docs/generated/**'
+              exit 1
+            else
+              echo "Only timestamp lines changed — OK."
+            fi
+          fi
