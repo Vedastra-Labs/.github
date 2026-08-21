@@ -1,46 +1,84 @@
 # Contributing to Vedastra Labs
 
 Version: 1.0
-Build Plan Version: v5.0
-Checklist Version: v4.60
-Last Verified Against Commit: N/A — see DOCUMENTATION-DEBT.md #1
-Verification Date: 2026-08-12
+Last Updated: 2026-08-21
 Owner: Akhilesh Angadi
 Lifecycle: Published
 
 ---
 
-Vedastra Labs is a hybrid multi-repo workspace (ADR-001): each product, platform,
-and infrastructure directory is its own git repository, cloned as siblings under the
-`vedastra-workspace` umbrella. Start there — the workspace README explains the layout
-and `setup.sh` clones what you need.
+Vedastra Labs is a single monorepo containing 9 products, shared platform packages,
+infrastructure, and internal tooling. Read `README.md` and `STATUS.md` before starting.
 
-## Commit & branch convention
+## Repo layout
 
-**Canonical source (do not restate elsewhere — Never Explain Twice, DOCUMENTATION-STANDARDS §3):**
-the git **commit message format** (Conventional Commits — `type(scope): subject` + body + footers)
-and the **branch strategy / `main` protection** rules live in one place:
+```
+Vedastra-Labs/
+├── wealthos/ healthos/ careeros/ focusos/ learningos/ lifeos/ campusos/                ← B2C/B2B products (Next.js)
+├── astra/               ← Developer platform (own Turborepo — see astra/CONTRIBUTING.md)
+├── buds-ai-plus/        ← Android app (Kotlin — see buds-ai-plus/CONTRIBUTING.md)
+├── vedastra-platform/   ← Shared @vedastra/* packages
+├── vedastra-admin/      ← Internal admin console
+├── vedastra-web/        ← Marketing website
+├── yantra/              ← Internal AI ops OS
+└── infrastructure/      ← Docker, scripts, QA
+```
 
-→ **`VEDASTRA-BUILD-PLAN.md` → "Commit Message Format (Conventional Commits)"**
-(in the `vedastra-workspace` umbrella repo).
+## Branch rules (strictly enforced by process)
 
-In short: Conventional Commits, imperative subject ≤72 chars, a body explaining
-*what & why* for non-trivial changes, and `Ref: ADR-NNN` / `Part-of:` footers.
-Branch flow is `main ← release/* ← develop ← feature/* | fix/*`; `main` is
-protected (PR required, no force-push, no deletion).
+| Branch | Rule |
+|--------|------|
+| `main` | **Never push directly.** Merged from `release/*` only. |
+| `develop` | **Never push directly.** Merged via PR after review. |
+| `feature/*` | Your working branch for new features. |
+| `fix/*` | Your working branch for bug fixes. |
+| `release/*` | Created by repo owner only for release prep. |
+
+**All work goes into `feature/*` or `fix/*` branches. Open a PR to `develop`. The repo owner reviews and merges.**
+
+## Commit message format (Conventional Commits)
+
+```
+type(scope): short subject ≤72 chars
+
+Body — what changed and why (required for non-trivial changes).
+
+Ref: ADR-NNN   ← if related to an architecture decision
+```
+
+Types: `feat` · `fix` · `chore` · `docs` · `test` · `refactor` · `style` · `perf`
+
+Scope = product or package name (e.g. `wealthos`, `healthos`, `@vedastra/db`).
 
 ## Before you open a PR
 
-- Read the repo's `README.md`, `CLAUDE.md`, and `STATUS.md` (per DOCUMENTATION-STANDARDS §18).
-- Keep changes within one repo where possible; cross-repo changes go through `@vedastra/*` in `vedastra-platform`.
-- Respect the non-negotiables: money is integer paise, every table has RLS, no journal/medical/financial text to external AI, no PWA, no Stripe/Supabase/Prisma.
-- Run the local gate before pushing: `bash infrastructure/scripts/run-qa.sh`.
+1. **Read** the product's `product.config.ts` — it drives tenancy, billing, and build status.
+2. **Run** the local QA gate: `bash infrastructure/scripts/run-qa.sh`
+3. **Check** your branch is up to date with `develop` (rebase, don't merge).
+4. **Verify** your PR description explains *what* and *why*, not just *what*.
+
+## Non-negotiable rules
+
+These are hard constraints — do not work around them:
+
+- **Money = integer paise.** Never use floats for currency. `₹1 = 100 paise`.
+- **RLS on every table.** All queries use `withRLS` / `withRLSTx` (Drizzle). Never bypass.
+- **No `any` in TypeScript.** All inputs validated with Zod.
+- **No PWA.** No service workers or web manifests.
+- **No Stripe, Supabase, or Prisma.** Stack is Razorpay + self-hosted Postgres + Drizzle.
+- **Privacy guard.** Journal text, medical data, and financial detail must never reach external AI or telemetry.
+- **Web ⇄ Mobile parity.** Any user-facing web change must have a matching React Native screen in `@vedastra/mobile-ui`, or be explicitly logged as a mobile-parity backlog item.
+- **No credentials in code.** Secrets live in `~/.local/bin/.env.bridge` and `.env.*` files (gitignored).
+
+## Cross-product changes
+
+Shared behaviour (auth, billing, events, design tokens) lives in `vedastra-platform/packages/`.
+Do not duplicate platform logic inside a product — extend the platform package instead.
 
 ## Documentation
 
-All documentation is governed by `DOCUMENTATION-STANDARDS.md` and indexed in
-`DOCUMENTATION-MAP.md` (both in the umbrella repo). If your change alters behaviour,
-update the docs in the same PR (Definition of Done, §19).
+If your change alters user-facing behaviour, update the relevant docs in the same PR.
+All docs are governed by `DOCUMENTATION-STANDARDS.md` and indexed in `DOCUMENTATION-MAP.md`.
 
 ---
 
